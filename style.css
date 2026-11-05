@@ -48,6 +48,20 @@ button { font: inherit; color: inherit; cursor: pointer; border: none; }
 }
 .icon-btn:active, .tool-btn:active, .piece:active, .big-btn:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--ink); }
 
+button.pill { cursor: pointer; }
+.mode-pill { background: var(--gold); }
+.modes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.mode-card {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left;
+  background: #fff; border: 3px solid var(--ink); border-radius: 18px; box-shadow: var(--shadow); padding: 12px;
+}
+.mode-card:hover { background: #fff3c4; }
+.mode-card:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--ink); }
+.mode-card .mode-ico { font-size: 34px; }
+.mode-card b { font-size: 20px; }
+.mode-card span:last-child { font-size: 14px; line-height: 1.35; }
+@media (max-width: 480px) { .modes { grid-template-columns: 1fr; } }
+
 /* --- Bauleiste --- */
 #buildbar {
   position: absolute; left: 8px; right: 8px; bottom: calc(8px + var(--safe-b));

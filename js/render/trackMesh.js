@@ -65,23 +65,38 @@ export function buildTrackMesh(track) {
     segments.push({ samples: track.closer.samples, piece: { type: 'closer', material: last.material, color: last.color } });
   }
 
+  // Durchgehende Schienen: gleiche Farbe + Material werden zu einem Rohr verbunden (keine Nahtstellen)
+  const runs = [];
+  for (const seg of segments) {
+    const last = runs[runs.length - 1];
+    if (last && last.material === seg.piece.material && last.color === seg.piece.color) {
+      last.samples.push(...seg.samples.slice(1));
+    } else {
+      runs.push({ material: seg.piece.material, color: seg.piece.color, samples: seg.samples.slice() });
+    }
+  }
+  const offR = (s, l, u) => V(s.p).addScaledVector(V(s.left), l).addScaledVector(V(s.up), u);
+  for (const run of runs) {
+    const wood = run.material === 'wood';
+    const color = run.color;
+    const sub = run.samples.filter((_, i) => i % 2 === 0 || i === run.samples.length - 1);
+    tube(sub.map((s) => offR(s, 0.5, 0)), wood ? 0.07 : 0.09, wood ? shade(color, 0.85) : color);
+    tube(sub.map((s) => offR(s, -0.5, 0)), wood ? 0.07 : 0.09, wood ? shade(color, 0.85) : color);
+    if (wood) {
+      tube(sub.map((s) => offR(s, 0.5, -0.17)), 0.12, WOOD_DARK);
+      tube(sub.map((s) => offR(s, -0.5, -0.17)), 0.12, WOOD_DARK);
+    } else {
+      tube(sub.map((s) => offR(s, 0, -0.45)), 0.17, shade(color, 0.7));
+    }
+  }
+
   for (const seg of segments) {
     const { samples, piece } = seg;
     const def = PIECES[piece.type] || {};
     const wood = piece.material === 'wood';
-    const color = piece.color;
     const sub = samples.filter((_, i) => i % 2 === 0 || i === samples.length - 1);
     const off = (s, l, u) => V(s.p).addScaledVector(V(s.left), l).addScaledVector(V(s.up), u);
 
-    // Schienen
-    tube(sub.map((s) => off(s, 0.5, 0)), wood ? 0.07 : 0.09, wood ? shade(color, 0.85) : color);
-    tube(sub.map((s) => off(s, -0.5, 0)), wood ? 0.07 : 0.09, wood ? shade(color, 0.85) : color);
-    if (wood) {
-      tube(sub.map((s) => off(s, 0.5, -0.17)), 0.12, WOOD_DARK);
-      tube(sub.map((s) => off(s, -0.5, -0.17)), 0.12, WOOD_DARK);
-    } else {
-      tube(sub.map((s) => off(s, 0, -0.45)), 0.17, shade(color, 0.7));
-    }
     if (piece.chain) tube(sub.map((s) => off(s, 0, -0.02)), 0.05, '#2b2b2b');
 
     // Schwellen, Schrauben, Bremsen

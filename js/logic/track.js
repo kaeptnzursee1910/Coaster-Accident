@@ -6,10 +6,17 @@ import { add, sub, mul, dot, cross, norm, len, dist, forward, clamp } from './ve
 export const PLOT = { minX: -40, maxX: 40, minZ: -31, maxZ: 45, maxY: 55, minY: 0.6 };
 export const START = { pos: [-24, 1.2, -27], yaw: 90, pitch: 0 };
 export const START_BUDGET = 30000;
+// Sandbox: praktisch unendliche Fläche, mehr Höhe, unbegrenztes Geld
+export const SANDBOX_PLOT = { minX: -3000, maxX: 3000, minZ: -3000, maxZ: 3000, maxY: 150, minY: 0.6 };
+export const MODES = {
+  career: { name: 'Karriere', plot: PLOT, budget: true, maxCloser: 260 },
+  sandbox: { name: 'Sandbox', plot: SANDBOX_PLOT, budget: false, maxCloser: 2500 },
+};
 const CLOSE_COST_PER_M = 90;
 
 export class Track {
-  constructor() {
+  constructor(mode = 'career') {
+    this.mode = MODES[mode] ? mode : 'career';
     this.pieces = [{ type: 'station', material: 'steel', color: '#ff4d6d' }];
     this.settings = { bolts: 'standard', supports: 'normal' };
     this.closed = false;
@@ -20,10 +27,10 @@ export class Track {
 
   // --- Speichern / Laden ---
   toJSON() {
-    return { pieces: this.pieces, settings: this.settings, closed: this.closed, income: this.income };
+    return { mode: this.mode, pieces: this.pieces, settings: this.settings, closed: this.closed, income: this.income };
   }
-  static fromJSON(data) {
-    const t = new Track();
+  static fromJSON(data, mode = 'career') {
+    const t = new Track(mode);
     try {
       if (!data || !Array.isArray(data.pieces) || data.pieces[0]?.type !== 'station') return t;
       t.pieces = data.pieces.filter((p) => PIECES[p.type] && MATERIALS[p.material]);
@@ -66,25 +73,27 @@ export class Track {
     for (const p of this.pieces) c += this.pieceCost(p.type, p.material, p.chain);
     return c + this.closerCost();
   }
-  get money() { return START_BUDGET + this.income - this.totalCost(); }
+  get sandbox() { return this.mode === 'sandbox'; }
+  get plot() { return MODES[this.mode].plot; }
+  get money() { return this.sandbox ? Infinity : START_BUDGET + this.income - this.totalCost(); }
 
   // Prüft, ob ein Bauteil an das Streckenende passt.
   canAdd(type, material = 'steel', chain = false) {
     const def = PIECES[type];
-    if (this.closed) return { ok: false, reason: 'Die Strecke ist geschlossen. Öffne sie mit ↶ Rückgängig.' };
+    if (this.closed) return { ok: false, short: 'geschlossen', reason: 'Die Strecke ist geschlossen. Öffne sie mit ↶ Rückgängig.' };
     const pitch = this.endState.pitch;
-    if (def.flatOnly && Math.abs(pitch) > 0.1) return { ok: false, reason: `${def.name} geht nur auf flacher Strecke.` };
-    if (def.maxPitch !== undefined && Math.abs(pitch) > def.maxPitch + 0.1) return { ok: false, reason: 'Zu steil für eine Kurve.' };
+    if (def.flatOnly && Math.abs(pitch) > 0.1) return { ok: false, short: 'nur flach', reason: `${def.name} geht nur auf waagerechter Strecke. Baue erst mit Hoch/Runter, bis die Bahn flach ist.` };
+    if (def.maxPitch !== undefined && Math.abs(pitch) > def.maxPitch + 0.1) return { ok: false, short: 'zu steil', reason: 'Zu steil für eine Kurve.' };
     if (def.dPitch && !def.flatOnly) {
       const np = pitch + def.dPitch;
-      if (Math.abs(np) > 75.1) return { ok: false, reason: 'Steiler geht es nicht!' };
+      if (Math.abs(np) > 75.1) return { ok: false, short: 'max. Neigung', reason: 'Steiler geht es nicht!' };
     }
-    if (chain && def.noChain) return { ok: false, reason: `${def.name} geht nicht mit Kettenlift.` };
+    if (chain && def.noChain) return { ok: false, short: 'ohne Kette', reason: `${def.name} geht nicht mit Kettenlift – schalte ⛓️ aus.` };
     const cost = this.pieceCost(type, material, chain);
-    if (cost > this.money) return { ok: false, reason: `Nicht genug Geld (${cost.toLocaleString('de-DE')} € nötig).` };
+    if (cost > this.money) return { ok: false, short: 'zu teuer', reason: `Nicht genug Geld (${cost.toLocaleString('de-DE')} € nötig).` };
     const g = generatePiece(type, this.endState);
-    const bad = checkSamples(g.samples);
-    if (bad) return { ok: false, reason: bad };
+    const bad = checkSamples(g.samples, this.plot);
+    if (bad) return { ok: false, short: 'kein Platz', reason: bad };
     return { ok: true, cost };
   }
 
@@ -122,7 +131,7 @@ export class Track {
     if (this.pieces.length < 4) return { ok: false, reason: 'Baue erst ein paar Teile mehr.' };
     const key = JSON.stringify([this.endState, this.settings, this.income, this.pieces.length]);
     if (this._closeCache && this._closeCache.key === key) return this._closeCache.res;
-    const c = makeCloser(this.endState);
+    const c = makeCloser(this.endState, MODES[this.mode]);
     let res;
     if (!c.ok) res = c;
     else {
@@ -180,7 +189,7 @@ export class Track {
 }
 
 // Prüft Stützpunkte auf Boden, Grenzen und Kreuzungen mit dem Bahnhof.
-function checkSamples(samples) {
+function checkSamples(samples, PLOT) {
   for (const s of samples) {
     const [x, y, z] = s.p;
     if (y < PLOT.minY) return 'Da würde die Bahn in den Boden fahren! Erst hoch bauen.';
@@ -193,14 +202,14 @@ function checkSamples(samples) {
 }
 
 // Verbindet das Ende automatisch mit dem Bahnhof (Kurve – Gerade – Kurve, "Dubins-Pfad").
-function makeCloser(endState) {
+function makeCloser(endState, mode) {
   const d = dist(endState.pos, START.pos);
   if (d < 3) return { ok: false, reason: 'Das Ende ist zu nah am Bahnhof – baue noch etwas weiter.' };
   if (Math.abs(endState.pitch) > 50.1) return { ok: false, reason: 'Das Ende ist zu steil. Mach es erst flacher.' };
   let best = null, reason = 'Kein Platz für den Rückweg. Bau das Ende näher an die linke Seite des Bahnhofs.';
   for (const R of [9, 7.5, 6]) {
     for (const plan of dubinsPlans(endState, START, R)) {
-      const c = closerFromPlan(endState, plan, R);
+      const c = closerFromPlan(endState, plan, R, mode);
       if (c.ok) { if (!best || c.length < best.length) best = c; }
       else reason = c.reason;
     }
@@ -261,13 +270,13 @@ function dubinsPlans(from, to, R) {
   return plans;
 }
 
-function closerFromPlan(endState, plan, R) {
+function closerFromPlan(endState, plan, R, mode) {
   const r2 = integrate2D(endState.pos[0], endState.pos[2], endState.yaw, plan, R);
   const flat = r2.pts;
   const cum = [0];
   for (let i = 1; i < flat.length; i++) cum.push(cum[i - 1] + Math.hypot(flat[i][0] - flat[i - 1][0], flat[i][1] - flat[i - 1][1]));
   const Lh = cum[cum.length - 1];
-  if (Lh > 260) return { ok: false, reason: 'Der Rückweg wäre viel zu lang. Bau das Ende näher zum Bahnhof.' };
+  if (Lh > mode.maxCloser) return { ok: false, reason: 'Der Rückweg wäre viel zu lang. Bau das Ende näher zum Bahnhof.' };
   // Höhenverlauf: weicher Übergang von Endhöhe/-neigung zur Bahnhofshöhe
   const y0 = endState.pos[1], y1 = START.pos[1];
   const m0 = Math.tan(endState.pitch * Math.PI / 180) * Lh;
@@ -293,9 +302,9 @@ function closerFromPlan(endState, plan, R) {
   }
   bankCloser(samples, length);
   const nn = samples.length;
-  const bad = checkSamples(samples.slice(2, nn - Math.ceil(13 / STEP)));
+  const bad = checkSamples(samples.slice(2, nn - Math.ceil(13 / STEP)), mode.plot);
   if (bad) return { ok: false, reason: 'Kein Platz für den Rückweg: ' + bad };
-  if (samples.some((s) => s.p[1] < PLOT.minY)) return { ok: false, reason: 'Der Rückweg ginge durch den Boden.' };
+  if (samples.some((s) => s.p[1] < mode.plot.minY)) return { ok: false, reason: 'Der Rückweg ginge durch den Boden.' };
   return { ok: true, samples, length };
 }
 

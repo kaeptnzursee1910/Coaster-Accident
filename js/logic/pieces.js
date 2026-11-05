@@ -29,8 +29,8 @@ export const COLORS = ['#ff4d6d', '#ffb703', '#3a86ff', '#2ec4b6', '#8338ec', '#
 export const PIECES = {
   station: { name: 'Bahnhof', icon: '🚉', len: 12, cost: 0, station: true, hidden: true },
   straight: { name: 'Gerade', icon: '⬆️', len: 4, cost: 300 },
-  left: { name: 'Kurve links', icon: '↰', len: (Math.PI / 2) * 10, dYaw: 90, bank: 65, ease: 0.4, cost: 500, maxPitch: 50 },
-  right: { name: 'Kurve rechts', icon: '↱', len: (Math.PI / 2) * 10, dYaw: -90, bank: -65, ease: 0.4, cost: 500, maxPitch: 50 },
+  left: { name: 'Kurve links', icon: '↰', len: (Math.PI / 2) * 12, dYaw: 90, bank: 65, ease: 1, cost: 500, maxPitch: 50 },
+  right: { name: 'Kurve rechts', icon: '↱', len: (Math.PI / 2) * 12, dYaw: -90, bank: -65, ease: 1, cost: 500, maxPitch: 50 },
   up: { name: 'Hoch', icon: '↗️', len: 5, dPitch: 25, cost: 400 },
   down: { name: 'Runter', icon: '↘️', len: 5, dPitch: -25, cost: 400 },
   loop: { name: 'Looping', icon: '➰', len: 40, dPitch: 360, lateral: 3, teardrop: 0.7, cost: 2500, flatOnly: true, inversion: true, noChain: true },
@@ -72,7 +72,7 @@ export function generatePiece(type, state) {
     const L = leftOf(yaw);
     const U = cross(f, L);
     let roll = 0;
-    if (def.bank) roll = (def.bank * (1 - e * Math.cos(2 * Math.PI * t))) / (1 + e);
+    if (def.bank) roll = (def.bank * (1 - Math.cos(2 * Math.PI * t))) / 2; // beginnt und endet flach
     if (def.roll) roll = def.roll * smooth(t);
     const r = roll * DEG;
     const Ur = add(mul(U, Math.cos(r)), mul(L, Math.sin(r)));

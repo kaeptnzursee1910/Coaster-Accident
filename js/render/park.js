@@ -10,24 +10,30 @@ export function buildPark(scene) {
   scene.add(root);
 
   // Wiese
-  const grass = new THREE.Mesh(new THREE.CircleGeometry(220, 48), toon('#7ed957'));
+  const grass = new THREE.Mesh(new THREE.CircleGeometry(4000, 64), toon('#7ed957'));
   grass.rotation.x = -Math.PI / 2;
   grass.receiveShadow = true;
   root.add(grass);
 
-  // Baufläche (Sand) mit Zaun
+  // Baufläche (Sand) mit Zaun – im Sandbox-Modus ausgeblendet
+  const plotGroup = new THREE.Group();
+  root.add(plotGroup);
+  const sandboxGrid = new THREE.GridHelper(1600, 160, 0x6cc644, 0x6cc644);
+  sandboxGrid.position.y = 0.06;
+  sandboxGrid.visible = false;
+  root.add(sandboxGrid);
   const pw = PLOT.maxX - PLOT.minX, pd = PLOT.maxZ - PLOT.minZ;
   const cx = (PLOT.maxX + PLOT.minX) / 2, cz = (PLOT.maxZ + PLOT.minZ) / 2;
   const plot = new THREE.Mesh(new THREE.PlaneGeometry(pw, pd), toon('#f2e3b3'));
   plot.rotation.x = -Math.PI / 2;
   plot.position.set(cx, 0.03, cz);
   plot.receiveShadow = true;
-  root.add(plot);
+  plotGroup.add(plot);
   // Raster auf der Baufläche
   const grid = new THREE.GridHelper(Math.max(pw, pd), Math.max(pw, pd) / 4, 0xd9c48f, 0xd9c48f);
   grid.position.set(cx, 0.05, cz);
   grid.scale.set(pw / Math.max(pw, pd), 1, pd / Math.max(pw, pd));
-  root.add(grid);
+  plotGroup.add(grid);
 
   // Zaun: Pfosten (instanziert) + Seil
   const posts = [];
@@ -37,14 +43,14 @@ export function buildPark(scene) {
   const postMesh = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.12, 0.12, 1.2, 6), toon('#ff6b6b'), posts.length);
   const m = new THREE.Matrix4();
   posts.forEach(([x, z], i) => { m.makeTranslation(x, 0.6, z); postMesh.setMatrixAt(i, m); });
-  root.add(postMesh);
+  plotGroup.add(postMesh);
   const ropeMat = toon('#ffd166');
   const rope = (x1, z1, x2, z2) => {
     const len = Math.hypot(x2 - x1, z2 - z1);
     const r = new THREE.Mesh(new THREE.BoxGeometry(len, 0.08, 0.08), ropeMat);
     r.position.set((x1 + x2) / 2, 1.0, (z1 + z2) / 2);
     r.rotation.y = -Math.atan2(z2 - z1, x2 - x1);
-    root.add(r);
+    plotGroup.add(r);
   };
   rope(PLOT.minX - 1, PLOT.minZ - 1, PLOT.maxX + 1, PLOT.minZ - 1);
   rope(PLOT.minX - 1, PLOT.maxZ + 1, PLOT.maxX + 1, PLOT.maxZ + 1);
@@ -110,7 +116,13 @@ export function buildPark(scene) {
   const walkers = makeWalkers(root, 14, rnd);
   updaters.push((dt, t) => walkers.update(dt, t));
 
-  return { update: (dt, t) => updaters.forEach((u) => u(dt, t)) };
+  return {
+    update: (dt, t) => updaters.forEach((u) => u(dt, t)),
+    setSandbox(on) {
+      plotGroup.visible = !on;
+      sandboxGrid.visible = on;
+    },
+  };
 }
 
 function mulberry(a) {

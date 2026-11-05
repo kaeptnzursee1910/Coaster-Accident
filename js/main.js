@@ -11,8 +11,9 @@ import { buildTrackMesh, makeEndMarker, makeTargetMarker } from './render/trackM
 import { TrainView } from './render/trainView.js';
 
 const $ = (id) => document.getElementById(id);
-const SAVE_KEY = 'coaster-accident-save-v1';
-const euro = (n) => `${Math.round(n).toLocaleString('de-DE')} €`;
+const SAVE_KEYS = { career: 'coaster-accident-save-v1', sandbox: 'coaster-accident-save-sandbox-v1' };
+const MODE_KEY = 'coaster-accident-mode';
+const euro = (n) => (Number.isFinite(n) ? `${Math.round(n).toLocaleString('de-DE')} €` : '∞');
 const isTouch = matchMedia('(pointer: coarse)').matches;
 
 // ---------- Szene ----------
@@ -28,7 +29,7 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color('#8fd3ff');
 scene.fog = new THREE.Fog('#8fd3ff', 140, 330);
 
-const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 800);
+const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 6000);
 camera.position.set(-38, 58, -78);
 
 scene.add(new THREE.HemisphereLight('#ffffff', '#7ed957', 1.4));
@@ -55,8 +56,10 @@ try { await Promise.race([document.fonts.load('bold 64px Fredoka'), new Promise(
 const park = buildPark(scene);
 
 // ---------- Spielstand ----------
-let track = loadTrack();
-let lastRating = loadLastRating();
+let gameMode = 'career';
+try { if (localStorage.getItem(MODE_KEY) === 'sandbox') gameMode = 'sandbox'; } catch (e) { /* */ }
+let track = loadTrack(gameMode);
+let lastRating = loadLastRating(gameMode);
 let trackGroup = null;
 const endMarker = makeEndMarker();
 const targetMarker = makeTargetMarker();
@@ -69,18 +72,44 @@ let ride = null, guests = [], rideEndTimer = 0, camMode = 'follow';
 let camGoal = null;
 const trainView = new TrainView(scene);
 
-function loadTrack() {
+function loadTrack(m) {
   try {
-    const raw = localStorage.getItem(SAVE_KEY);
-    if (raw) return Track.fromJSON(JSON.parse(raw).track);
+    const raw = localStorage.getItem(SAVE_KEYS[m]);
+    if (raw) return Track.fromJSON(JSON.parse(raw).track, m);
   } catch (e) { /* ignorieren */ }
-  return new Track();
+  return new Track(m);
 }
-function loadLastRating() {
-  try { return JSON.parse(localStorage.getItem(SAVE_KEY))?.lastRating ?? null; } catch (e) { return null; }
+function loadLastRating(m) {
+  try { return JSON.parse(localStorage.getItem(SAVE_KEYS[m]))?.lastRating ?? null; } catch (e) { return null; }
 }
 function save() {
-  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ track: track.toJSON(), lastRating })); } catch (e) { /* voll/privat */ }
+  try {
+    localStorage.setItem(SAVE_KEYS[gameMode], JSON.stringify({ track: track.toJSON(), lastRating }));
+    localStorage.setItem(MODE_KEY, gameMode);
+  } catch (e) { /* voll/privat */ }
+}
+
+// Karriere (Budget, Baufläche) oder Sandbox (unendlich Platz und Geld)
+function applyModeLook() {
+  const sb = gameMode === 'sandbox';
+  park.setSandbox(sb);
+  scene.fog.near = sb ? 300 : 140;
+  scene.fog.far = sb ? 2600 : 330;
+  controls.maxDistance = sb ? 900 : 200;
+  $('modeName').innerHTML = sb ? '🏖️<span class="hide-sm"> Sandbox</span>' : '🏆<span class="hide-sm"> Karriere</span>';
+}
+function switchMode(m) {
+  if (mode !== 'build') stopRide();
+  save();
+  gameMode = m;
+  track = loadTrack(m);
+  lastRating = loadLastRating(m);
+  applyModeLook();
+  buildPanel();
+  rebuildTrack();
+  parkTrain();
+  setMode();
+  toast(m === 'sandbox' ? '🏖️ Sandbox: unendlich Platz und Geld!' : '🏆 Karriere: Budget und Baufläche zählen.');
 }
 
 function rebuildTrack() {
@@ -170,7 +199,8 @@ function refreshUI() {
     const b = pieceButtons[type];
     const check = track.canAdd(type, ui.material, ui.chain && !PIECES[type].noChain);
     b.classList.toggle('disabled', !check.ok);
-    b.querySelector('.sub').textContent = euro(track.pieceCost(type, ui.material, ui.chain && !PIECES[type].noChain));
+    b.querySelector('.sub').textContent = !check.ok ? `⚠️ ${check.short || 'gesperrt'}`
+      : track.sandbox ? 'gratis' : euro(track.pieceCost(type, ui.material, ui.chain && !PIECES[type].noChain));
     b.dataset.reason = check.ok ? '' : check.reason;
   }
   const chainBtn = $('btnChain');
@@ -182,7 +212,7 @@ function refreshUI() {
     close.classList.add('disabled');
   } else {
     const c = track.canClose();
-    close.innerHTML = c.ok ? `<span>🔗</span> Schließen <small>(${euro(c.cost)})</small>` : '<span>🔗</span> Schließen';
+    close.innerHTML = c.ok && !track.sandbox ? `<span>🔗</span> Schließen <small>(${euro(c.cost)})</small>` : '<span>🔗</span> Schließen';
     close.classList.toggle('disabled', !c.ok);
   }
   $('btnRide').classList.toggle('pulse', track.closed);
@@ -263,7 +293,9 @@ function showResult() {
   lastRating = avg;
 
   let moneyLine;
-  if (ride.status === 'crashed') {
+  if (track.sandbox) {
+    moneyLine = '🏖️ Sandbox – hier spielt Geld keine Rolle.';
+  } else if (ride.status === 'crashed') {
     const fine = Math.min(1500, Math.max(0, track.money));
     track.income -= fine;
     moneyLine = `🚑 Schadenersatz: −${euro(fine)}`;
@@ -358,7 +390,13 @@ $('btnReset').addEventListener('click', () => {
   toast('Strecke abgerissen.');
 });
 $('btnHelp').addEventListener('click', () => $('help').classList.remove('hidden'));
-$('btnHelpClose').addEventListener('click', () => { $('help').classList.add('hidden'); try { localStorage.setItem('coaster-help-seen', '1'); } catch (e) { /* */ } });
+function closeHelp() { $('help').classList.add('hidden'); try { localStorage.setItem('coaster-help-seen', '1'); } catch (e) { /* */ } }
+$('btnHelpClose').addEventListener('click', () => { closeHelp(); if (gameMode !== 'career') switchMode('career'); });
+$('btnHelpSandbox').addEventListener('click', () => { closeHelp(); if (gameMode !== 'sandbox') switchMode('sandbox'); });
+$('btnMode').addEventListener('click', () => $('modePick').classList.remove('hidden'));
+$('pickCareer').addEventListener('click', () => { $('modePick').classList.add('hidden'); if (gameMode !== 'career') switchMode('career'); });
+$('pickSandbox').addEventListener('click', () => { $('modePick').classList.add('hidden'); if (gameMode !== 'sandbox') switchMode('sandbox'); });
+$('pickCancel').addEventListener('click', () => $('modePick').classList.add('hidden'));
 $('btnChain').addEventListener('click', () => { ui.chain = !ui.chain; refreshUI(); toast(ui.chain ? '⛓️ Kettenlift an: neue Teile ziehen den Zug hoch.' : 'Kettenlift aus.'); });
 $('btnMat').addEventListener('click', () => $('matPanel').classList.toggle('open'));
 $('btnClose').addEventListener('click', () => {
@@ -427,6 +465,9 @@ function frame() {
   }
 
   updateCamera(dt);
+  // Sonne (Schatten) folgt dem Blickpunkt – wichtig für große Sandbox-Bahnen
+  sun.target.position.set(controls.target.x, 0, controls.target.z);
+  sun.position.set(controls.target.x - 40, 80, controls.target.z - 30);
   if (controls.enabled && !(trainView.crashed && mode === 'ride')) controls.update();
   outline.render(scene, camera);
   requestAnimationFrame(frame);
@@ -436,6 +477,7 @@ function frame() {
 buildPieceBar();
 buildPanel();
 resize();
+applyModeLook();
 rebuildTrack();
 parkTrain();
 setMode();
@@ -444,4 +486,4 @@ try { if (!localStorage.getItem('coaster-help-seen')) $('help').classList.remove
 requestAnimationFrame(frame);
 
 // Für Tests/Neugierige
-window.coaster = { get track() { return track; }, get ride() { return ride; }, startRide, addPiece, rebuild: rebuildTrack, PLOT };
+window.coaster = { get track() { return track; }, get ride() { return ride; }, startRide, addPiece, rebuild: rebuildTrack, camera, controls, PLOT };

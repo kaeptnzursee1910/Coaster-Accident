@@ -28,6 +28,7 @@
     <header id="topbar">
       <div class="logo">🎢 <span>Coaster Accident</span></div>
       <div class="stats">
+        <button class="pill mode-pill" id="btnMode" title="Spielmodus wechseln"><b id="modeName">🏆 Karriere</b></button>
         <div class="pill" title="Budget">💰 <b id="money">0 €</b></div>
         <div class="pill hide-sm" title="Streckenlänge">📏 <b id="length">0 m</b></div>
         <div class="pill" title="Letzte Bewertung">⭐ <b id="lastRating">–</b></div>
@@ -119,7 +120,32 @@
         </ol>
         <p><b>Bedienung:</b> Ziehen = drehen · Zwei Finger / Mausrad = zoomen · Rechte Maustaste / zwei Finger ziehen = verschieben.</p>
         <p><b>Bewertet wird:</b> 😱 Nervenkitzel · 🛋️ Komfort · 🦺 Sicherheit · 🎨 Optik &amp; Länge.</p>
-        <div class="row"><button class="big-btn primary" id="btnHelpClose">Los geht's!</button></div>
+        <p><b>Spielmodus wählen</b> (später oben über den Modus-Knopf wechselbar):</p>
+        <div class="row">
+          <button class="big-btn primary" id="btnHelpClose">🏆 Karriere</button>
+          <button class="big-btn secondary" id="btnHelpSandbox">🏖️ Sandbox</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Spielmodus -->
+    <div id="modePick" class="modal hidden">
+      <div class="card">
+        <h2>🎮 Spielmodus</h2>
+        <div class="modes">
+          <button class="mode-card" id="pickCareer">
+            <span class="mode-ico">🏆</span>
+            <b>Karriere</b>
+            <span>30.000 € Startbudget, begrenzte Baufläche. Gute Fahrten bringen Ticketgeld, Unfälle kosten Schadenersatz.</span>
+          </button>
+          <button class="mode-card" id="pickSandbox">
+            <span class="mode-ico">🏖️</span>
+            <b>Sandbox</b>
+            <span>Unendlich Platz und unendlich Geld. Bauen, so groß und hoch du willst (bis 150 m).</span>
+          </button>
+        </div>
+        <p class="hint">Beide Modi haben einen eigenen Spielstand.</p>
+        <div class="row"><button class="big-btn secondary" id="pickCancel">Abbrechen</button></div>
       </div>
     </div>
 
