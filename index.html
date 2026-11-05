@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#4cc9f0" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <title>Coaster Accident – Achterbahn-Baukasten</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎢</text></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="app">
+    <canvas id="scene"></canvas>
+
+    <!-- Obere Leiste -->
+    <header id="topbar">
+      <div class="logo">🎢 <span>Coaster Accident</span></div>
+      <div class="stats">
+        <div class="pill" title="Budget">💰 <b id="money">0 €</b></div>
+        <div class="pill hide-sm" title="Streckenlänge">📏 <b id="length">0 m</b></div>
+        <div class="pill" title="Letzte Bewertung">⭐ <b id="lastRating">–</b></div>
+      </div>
+      <div class="top-actions">
+        <button class="icon-btn" id="btnUndo" title="Rückgängig">↶</button>
+        <button class="icon-btn" id="btnReset" title="Alles abreißen">🗑️</button>
+        <button class="icon-btn" id="btnHelp" title="Hilfe">❓</button>
+      </div>
+    </header>
+
+    <!-- Werkstoff-Panel -->
+    <section id="matPanel" class="panel">
+      <div class="panel-row">
+        <span class="label">Schiene</span>
+        <div class="seg" id="segMaterial"></div>
+      </div>
+      <div class="panel-row">
+        <span class="label">Farbe</span>
+        <div class="swatches" id="swatches"></div>
+      </div>
+      <div class="panel-row">
+        <span class="label">Schrauben</span>
+        <div class="seg" id="segBolts"></div>
+      </div>
+      <div class="panel-row">
+        <span class="label">Stützen</span>
+        <div class="seg" id="segSupports"></div>
+      </div>
+      <p class="hint">Holz ist billiger, rumpelt aber und hält weniger aus. Billige Schrauben und weite Stützen sparen Geld – bis es kracht!</p>
+    </section>
+
+    <!-- Bau-Leiste unten -->
+    <footer id="buildbar">
+      <div class="build-tools">
+        <button class="tool-btn toggle" id="btnChain"><span class="ico">⛓️</span><span class="lbl">Kettenlift</span><span class="sub">aus</span></button>
+        <button class="tool-btn" id="btnMat"><span class="ico">🧰</span><span class="lbl">Material</span><span class="sub" id="matSummary">Stahl</span></button>
+      </div>
+      <div class="pieces" id="pieces"></div>
+      <div class="build-actions">
+        <button class="big-btn secondary" id="btnClose"><span>🔗</span> Schließen</button>
+        <button class="big-btn primary" id="btnRide"><span>▶️</span> Fahrt!</button>
+      </div>
+    </footer>
+
+    <!-- Anzeige während der Fahrt -->
+    <div id="rideHud" class="hidden">
+      <div class="hud-box">
+        <div><small>Tempo</small><b id="hudSpeed">0</b><small>km/h</small></div>
+        <div><small>Höhe</small><b id="hudHeight">0</b><small>m</small></div>
+        <div><small>G-Kraft</small><b id="hudG">1.0</b><small>g</small></div>
+      </div>
+      <div class="load"><small>Belastung der Strecke</small><div class="bar"><i id="hudLoad"></i></div></div>
+      <div class="ride-actions">
+        <button class="big-btn secondary" id="btnCam"><span>🎥</span> <span id="camName">Verfolgen</span></button>
+        <button class="big-btn danger" id="btnStop"><span>⏹️</span> Stopp</button>
+      </div>
+    </div>
+
+    <!-- Ergebnis -->
+    <div id="result" class="modal hidden">
+      <div class="card">
+        <h2 id="resTitle">Bewertung</h2>
+        <p id="resReason" class="reason"></p>
+        <div class="overall"><span id="resStars"></span><b id="resAvg"></b></div>
+        <div id="resCriteria" class="criteria"></div>
+        <h3>Das sagen die Fahrgäste</h3>
+        <div id="resGuests" class="guests"></div>
+        <div id="resNotes" class="notes"></div>
+        <div id="resMoney" class="money"></div>
+        <div class="row">
+          <button class="big-btn secondary" id="btnAgain">🔁 Nochmal</button>
+          <button class="big-btn primary" id="btnBuild">🛠️ Weiterbauen</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hilfe -->
+    <div id="help" class="modal hidden">
+      <div class="card">
+        <h2>🎢 Willkommen im Coaster Park!</h2>
+        <p>Auf der leeren Sandfläche baust du deine eigene Achterbahn. Danach fahren kleine Gäste mit und vergeben <b>1–5 Sterne</b>.</p>
+        <ol>
+          <li><b>Teile antippen</b> – sie werden ans Ende der Strecke (grüner Pfeil) gebaut.</li>
+          <li><b>⛓️ Kettenlift</b> einschalten und mit <b>Hoch</b> bergauf bauen – ohne Kette schafft der Zug keinen Berg. Bis ganz oben!</li>
+          <li>Abfahrten, Kurven, <b>Looping</b> und <b>Schraube</b> einbauen.</li>
+          <li><b>🔗 Schließen</b> verbindet das Ende automatisch mit dem Bahnhof (Ziel: rosa Fahne links vom Bahnhof).</li>
+          <li><b>▶️ Fahrt!</b> – und hoffen, dass nichts kracht 😅</li>
+        </ol>
+        <p><b>Bedienung:</b> Ziehen = drehen · Zwei Finger / Mausrad = zoomen · Rechte Maustaste / zwei Finger ziehen = verschieben.</p>
+        <p><b>Bewertet wird:</b> 😱 Nervenkitzel · 🛋️ Komfort · 🦺 Sicherheit · 🎨 Optik &amp; Länge.</p>
+        <div class="row"><button class="big-btn primary" id="btnHelpClose">Los geht's!</button></div>
+      </div>
+    </div>
+
+    <div id="toast"></div>
+    <div id="loading">🎢 Park wird aufgebaut…</div>
+  </div>
+  <script type="module" src="js/main.js"></script>
+  <script>
+    // Falls Three.js nicht geladen werden kann (offline / alter Browser)
+    setTimeout(function () {
+      var l = document.getElementById('loading');
+      if (l && !l.classList.contains('hidden')) l.innerHTML = '😢 Das Spiel konnte nicht starten.<br><small>Braucht Internet (für Three.js) und einen aktuellen Browser mit WebGL.</small>';
+    }, 12000);
+  </script>
+</body>
+</html>
