@@ -345,9 +345,17 @@ function updateCamera(dt) {
 
 // ---------- Ereignisse ----------
 $('btnUndo').addEventListener('click', () => { if (track.undo()) { rebuildTrack(); buzz(10); } });
+let resetArmed = 0;
 $('btnReset').addEventListener('click', () => {
   if (track.pieces.length <= 1) return;
-  if (confirm('Ganze Strecke abreißen? Das Geld bekommst du zurück.')) { track.reset(); rebuildTrack(); parkTrain(); }
+  if (Date.now() - resetArmed > 3000) {
+    resetArmed = Date.now();
+    toast('🗑️ Nochmal tippen, um die ganze Strecke abzureißen (Geld zurück).', 3000);
+    return;
+  }
+  resetArmed = 0;
+  track.reset(); rebuildTrack(); parkTrain();
+  toast('Strecke abgerissen.');
 });
 $('btnHelp').addEventListener('click', () => $('help').classList.remove('hidden'));
 $('btnHelpClose').addEventListener('click', () => { $('help').classList.add('hidden'); try { localStorage.setItem('coaster-help-seen', '1'); } catch (e) { /* */ } });
