@@ -7,6 +7,7 @@ import { PIECES, BUILD_ORDER, MATERIALS, BOLTS, SUPPORTS, COLORS } from './logic
 import { Ride, CRASH_TEXT } from './logic/ride.js';
 import { rateRide, makeGuests, guestVerdict, CRITERIA, PERSONALITIES } from './logic/rating.js';
 import { buildPark } from './render/park.js';
+import { buildAttractions } from './render/attractions.js';
 import { buildTrackMesh, makeEndMarker, makeTargetMarker } from './render/trackMesh.js';
 import { TrainView } from './render/trainView.js';
 
@@ -53,7 +54,8 @@ controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
 
 // Schrift für Schilder laden (max. 1,5 s warten)
 try { await Promise.race([document.fonts.load('bold 64px Fredoka'), new Promise((r) => setTimeout(r, 1500))]); } catch (e) { /* egal */ }
-const park = buildPark(scene);
+const attractions = buildAttractions(scene);
+const park = buildPark(scene, attractions.blockers);
 
 // ---------- Spielstand ----------
 let gameMode = 'career';
@@ -429,6 +431,7 @@ function frame() {
   const dt = Math.min(clock.getDelta(), 1 / 20);
   time += dt;
   park.update(dt, time);
+  attractions.update(dt, time);
   endMarker.children[1].rotation.z += dt;
   endMarker.children[0].position.z = 1.4 + Math.sin(time * 4) * 0.25;
   targetMarker.rotation.y = Math.sin(time * 2) * 0.3;

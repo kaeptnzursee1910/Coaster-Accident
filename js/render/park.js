@@ -4,7 +4,7 @@ import { toon, castAll } from './toon.js';
 import { makePerson, walkPose } from './figures.js';
 import { PLOT, START } from '../logic/track.js';
 
-export function buildPark(scene) {
+export function buildPark(scene, blockers = []) {
   const updaters = [];
   const root = new THREE.Group();
   scene.add(root);
@@ -98,6 +98,7 @@ export function buildPark(scene) {
     const a = rnd() * Math.PI * 2, r = 60 + rnd() * 90;
     const x = Math.cos(a) * r, z = Math.sin(a) * r;
     if (Math.abs(x) < 4 && z < -40 && z > -80) continue;
+    if (blockers.some((b) => Math.hypot(x - b.x, z - b.z) < b.r + 3)) continue;
     root.add(makeTree(x, z, rnd));
   }
   // Wolken
